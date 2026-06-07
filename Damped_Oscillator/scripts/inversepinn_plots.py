@@ -10,6 +10,7 @@ Email           : danyial.munir@studio.unibo.it
 Last modified   : 24/05/2026
 """
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -27,11 +28,12 @@ from utils import save_show
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = SCRIPT_DIR / "outputs/parameter_estimation"
 
-# -- LaTeX font ------------------------------------------------------------
+# -- Font configuration ----------------------------------------------------
+USE_TEX = shutil.which("latex") is not None
 plt.rcParams.update(
     {
-        "text.usetex": True,
-        "font.family": "Helvetica",
+        "text.usetex": USE_TEX,
+        "font.family": "Helvetica" if USE_TEX else "DejaVu Sans",
     }
 )
 

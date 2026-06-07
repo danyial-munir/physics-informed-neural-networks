@@ -6,6 +6,7 @@ Email           : danyial.munir@studio.unibo.it
 Last modified   : 24/05/2026
 """
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -17,8 +18,14 @@ from data import analytic
 from plot import style_ax
 from utils import convert_to_mck
 
-# -- LaTeX font ------------------------------------------------
-plt.rcParams.update({"text.usetex": True, "font.family": "Helvetica"})
+# -- Font configuration ----------------------------------------
+USE_TEX = shutil.which("latex") is not None
+plt.rcParams.update(
+    {
+        "text.usetex": USE_TEX,
+        "font.family": "Helvetica" if USE_TEX else "DejaVu Sans",
+    }
+)
 
 # -- Color palette ------------------------------------------------
 BLUE = "#378ADD"  # noisy training observations

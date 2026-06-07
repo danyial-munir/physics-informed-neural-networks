@@ -12,6 +12,7 @@ Last modified   : 24/05/2026
 """
 
 import json
+import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -25,8 +26,14 @@ from model import predict, FCNet, InverseFCNet
 from utils import save_show, load_model
 from analytic import interpolate_solution_arr, u_0
 
-# -- LaTeX font ------------------------------------------------
-plt.rcParams.update({"text.usetex": True, "font.family": "Helvetica"})
+# -- Font configuration ----------------------------------------
+USE_TEX = shutil.which("latex") is not None
+plt.rcParams.update(
+    {
+        "text.usetex": USE_TEX,
+        "font.family": "Helvetica" if USE_TEX else "DejaVu Sans",
+    }
+)
 
 # -- Color palette ------------------------------------------------
 BLUE = "#378ADD"  # noisy training observations

@@ -12,6 +12,7 @@ Last modified   : 12/05/2026
 """
 
 import json
+import shutil
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -33,8 +34,14 @@ from utils import (
     save_show,
 )
 
-# -- LaTeX font ------------------------------------------------
-plt.rcParams.update({"text.usetex": True, "font.family": "Helvetica"})
+# -- Font configuration ----------------------------------------
+USE_TEX = shutil.which("latex") is not None
+plt.rcParams.update(
+    {
+        "text.usetex": USE_TEX,
+        "font.family": "Helvetica" if USE_TEX else "DejaVu Sans",
+    }
+)
 
 # -- Color palette ------------------------------------------------
 BLUE = "#378ADD"  # noisy training observations
