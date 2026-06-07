@@ -1,5 +1,5 @@
 def main():
-    print("Hello from pinn-dho-burgers!")
+    print("Hello from Physics-Informed Neural Networks!")
 
 
 if __name__ == "__main__":
