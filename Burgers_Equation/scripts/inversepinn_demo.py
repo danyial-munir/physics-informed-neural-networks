@@ -71,11 +71,17 @@ def resolve_parameters(args):
     return ic, nu
 
 
-def resolve_output_path(args):
-    """Pick an output folder based on viscosity regime."""
+def resolve_output_path(args, ic):
+    """Pick an output folder based on IC and viscosity regime unless overridden."""
     if args.output is not None:
         return args.output
-    return SCRIPT_DIR / f"outputs/inversepinn_{args.nu_regime()}"
+
+    nu_label = (
+        f"nu_{args.nu:g}".replace(".", "p")
+        if args.nu is not None
+        else args.nu_regime
+    )
+    return SCRIPT_DIR / f"outputs/inversepinn_{ic.lower()}_{nu_label}"
 
 
 def main() -> None:
@@ -90,7 +96,7 @@ def main() -> None:
 
     args = parse_args()
     ic, nu = resolve_parameters(args)
-    output_path = resolve_output_path(nu)
+    output_path = resolve_output_path(args, ic)
     output_path.mkdir(parents=True, exist_ok=True)
 
     print(f"IC     : {ic}")

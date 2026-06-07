@@ -373,7 +373,7 @@ uv run python Burgers_Equation/scripts/inversepinn_demo.py --nu-regime low --out
 | `--nu` | — | Fix viscosity to a specific value; skips randomisation |
 | `--nu-regime` | `high` | Viscosity regime to sample from when `--nu` is not set: `low` (0.005–0.015) or `high` (0.1–0.5). Inverse scripts only. |
 | `--show` | `False` | Display plots interactively after training |
-| `--output` | `outputs/<script>_<ic>` | Override the output directory |
+| `--output` | Forward: `outputs/pinn_<ic>`; inverse: `outputs/inversepinn_<ic>_<nu-regime>` or `outputs/inversepinn_<ic>_nu_<value>` when `--nu` is fixed | Override the output directory |
 
 ---
 
