@@ -105,6 +105,37 @@ optuna
 memory-profiler
 ```
 
+### Testing
+
+Install dev deps once:
+
+```bash
+uv sync --group dev
+```
+
+Run the complete suite (both projects, smoke + training-loop regression, in parallel):
+
+```bash
+uv run python run_tests.py
+```
+
+Run a single project's suite:
+
+```bash
+cd Damped_Oscillator && uv run python -m pytest tests
+cd Burgers_Equation && uv run python -m pytest tests
+```
+
+Run only smoke tests (fast, no training) or only regression tests (slower, trains tiny nets for a few hundred epochs) per project:
+
+```bash
+cd Damped_Oscillator && uv run python -m pytest tests/test_smoke.py
+cd Damped_Oscillator && uv run python -m pytest tests/test_training.py
+
+cd Burgers_Equation && uv run python -m pytest tests/test_smoke.py
+cd Burgers_Equation && uv run python -m pytest tests/test_training.py
+```
+
 ---
 
 ## Chapter 1 — Damped Harmonic Oscillator
