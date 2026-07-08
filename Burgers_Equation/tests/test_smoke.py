@@ -2,9 +2,9 @@ import numpy as np
 import torch
 
 from config import Config
-from model import FCNet, InverseFCNet, predict
+from model import FCNet, InverseFCNet, predict, predict_from_state
 from data import generate_data
-from losses import loss_data, loss_physics, loss_ic, loss_bc
+from losses import loss_data, loss_physics, loss_physics_inverse, loss_ic, loss_bc
 
 
 def small_cfg(**overrides) -> Config:
@@ -83,3 +83,27 @@ def test_losses_are_finite_and_differentiable():
     t_bc = torch.rand(5, 1)
     l_bc = loss_bc(cfg, model, t_bc)
     assert torch.isfinite(l_bc)
+
+
+def test_loss_physics_inverse_is_finite_and_differentiable():
+    cfg = small_cfg()
+    model = InverseFCNet(cfg)
+    t_col = torch.rand(5, 1, requires_grad=True)
+    x_col = torch.rand(5, 1, requires_grad=True)
+    l_phys = loss_physics_inverse(model, t_col, x_col)
+    assert torch.isfinite(l_phys)
+    l_phys.backward()
+    assert model._nu_raw.grad is not None
+
+
+def test_predict_from_state_matches_direct_predict():
+    cfg = small_cfg()
+    model = FCNet(cfg)
+    t = np.linspace(0.1, cfg.t_dom, 10)
+    x = np.linspace(0, cfg.L, 10)
+
+    state_dict = model.state_dict()
+    u_direct = predict(model, t, x)
+    u_restored = predict_from_state(state_dict, t, x, cfg)
+
+    assert np.allclose(u_direct, u_restored)

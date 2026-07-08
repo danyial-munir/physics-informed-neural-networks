@@ -16,7 +16,11 @@ PROJECTS = [p.parent for p in ROOT.glob("*/tests") if p.is_dir()]
 
 def run(project: Path) -> tuple[str, int, str]:
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests"],
+        [
+            sys.executable, "-m", "pytest", "tests",
+            "-v",
+            "--cov=.", "--cov-report=term-missing",
+        ],
         cwd=project,
         capture_output=True,
         text=True,
@@ -32,13 +36,15 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=len(PROJECTS)) as pool:
         results = list(pool.map(run, PROJECTS))
 
-    ok = True
-    for name, code, output in results:
+    for name, _, output in results:
         print(f"\n{'=' * 20} {name} {'=' * 20}")
         print(output)
-        ok &= code == 0
 
-    print(f"\n{'PASSED' if ok else 'FAILED'}: {', '.join(n for n, c, _ in results if c != 0) or 'all projects'}")
+    ok = all(code == 0 for _, code, _ in results)
+    print(f"\n{'=' * 20} SUMMARY {'=' * 20}")
+    for name, code, _ in results:
+        print(f"  {name:<20} {'PASSED' if code == 0 else 'FAILED'}")
+    print(f"\n{'ALL PROJECTS PASSED' if ok else 'SOME PROJECTS FAILED'}")
     return 0 if ok else 1
 
 

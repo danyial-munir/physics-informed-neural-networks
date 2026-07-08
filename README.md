@@ -113,17 +113,17 @@ Install dev deps once:
 uv sync --group dev
 ```
 
-Run the complete suite (both projects, smoke + training-loop regression, in parallel):
+Run the complete suite — both projects, smoke + training-loop regression, in parallel, per-test results and per-file coverage for each project, plus a pass/fail summary, all in one command:
 
 ```bash
 uv run python run_tests.py
 ```
 
-Run a single project's suite:
+Run a single project's suite (with the same verbose + coverage output):
 
 ```bash
-cd Damped_Oscillator && uv run python -m pytest tests
-cd Burgers_Equation && uv run python -m pytest tests
+cd Damped_Oscillator && uv run python -m pytest tests -v --cov=. --cov-report=term-missing
+cd Burgers_Equation && uv run python -m pytest tests -v --cov=. --cov-report=term-missing
 ```
 
 Run only smoke tests (fast, no training) or only regression tests (slower, trains tiny nets for a few hundred epochs) per project:

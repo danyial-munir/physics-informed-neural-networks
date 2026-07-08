@@ -61,3 +61,57 @@ def test_inverse_training_recovers_parameters_in_right_direction():
     assert history["loss_total"][-1] < history["loss_total"][0]
     assert np.isfinite(history["zeta_hat"][-1])
     assert np.isfinite(history["omega_0_hat"][-1])
+
+
+def test_training_with_data_loss_enabled():
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    cfg = tiny_cfg(use_data=True, randomise_observation=False)
+    model = FCNet(cfg)
+    data = generate_data(cfg)
+
+    history, _, _ = train(model, data, cfg, device=get_device(), verbatim=False)
+
+    assert history["loss_total"][-1] < history["loss_total"][0]
+    assert all(v > 0 for v in history["loss_data"])
+
+
+def test_training_without_extrapolation_collocation():
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    cfg = tiny_cfg(train_extrap=False)
+    model = FCNet(cfg)
+    data = generate_data(cfg)
+
+    history, _, _ = train(model, data, cfg, device=get_device(), verbatim=False)
+
+    assert history["loss_total"][-1] < history["loss_total"][0]
+
+
+def test_training_without_physics_loss():
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    cfg = tiny_cfg(use_physics=False, use_data=True)
+    model = FCNet(cfg)
+    data = generate_data(cfg)
+
+    history, _, _ = train(model, data, cfg, device=get_device(), verbatim=False)
+
+    assert all(lp == 0.0 for lp in history["loss_phys"])
+    assert history["loss_total"][-1] < history["loss_total"][0]
+
+
+def test_early_stopping_triggers_with_tiny_patience():
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    cfg = tiny_cfg(n_epochs=1000, patience=5, patience_threshold=1.0, log_every=1)
+    model = FCNet(cfg)
+    data = generate_data(cfg)
+
+    history, _, _ = train(model, data, cfg, device=get_device(), verbatim=False)
+
+    assert len(history["epoch"]) < cfg.n_epochs
