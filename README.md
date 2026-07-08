@@ -2,7 +2,7 @@
 
 **Author:** Danyial Munir  
 **Email:** danyial.munir@studio.unibo.it  
-**Last modified:** 07-June-2026
+**Last modified:** 08-July-2026
 
 This project applies Physics-Informed Neural Networks (PINNs) to two classical problems in mathematical physics:
 
