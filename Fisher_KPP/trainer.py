@@ -8,6 +8,7 @@ Contains:
 
 import time
 import copy
+import optuna
 from config import Config
 import torch
 import torch.nn as nn
@@ -23,6 +24,7 @@ def train(
     device: torch.device,
     label: str = "Model",
     verbatim: bool = True,
+    optuna_trial: optuna.Trial = None,
 ) -> tuple[dict, dict, dict]:
     """
     Train the PINN in forward or inverse mode (inverse detected via
@@ -152,6 +154,11 @@ def train(
         with torch.no_grad():
             u_val_pred = model(t_val_t, x_val_t)
             l_val = loss_data(u_val_pred, u_val_t)
+
+        if optuna_trial is not None and epoch % cfg.log_every == 0:
+            optuna_trial.report(l_val.item(), epoch)
+            if optuna_trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
 
         if l_val.item() < best_val_loss - cfg.patience_threshold:
             epochs_no_improvement = 0

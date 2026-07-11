@@ -1,5 +1,7 @@
 import numpy as np
+import pytest
 import torch
+import optuna
 
 from config import Config
 from model import FCNet, InverseFCNet
@@ -89,3 +91,22 @@ def test_early_stopping_triggers_with_tiny_patience():
     history, _, _ = train(model, data, cfg, device=get_device(), verbatim=False)
 
     assert len(history["epoch"]) < cfg.n_epochs
+
+
+def test_train_raises_trial_pruned_when_trial_requests_prune():
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    class AlwaysPruneTrial:
+        def report(self, value, step):
+            pass
+
+        def should_prune(self):
+            return True
+
+    cfg = tiny_cfg(log_every=1)
+    model = FCNet(cfg)
+    data = generate_data(cfg)
+
+    with pytest.raises(optuna.exceptions.TrialPruned):
+        train(model, data, cfg, device=get_device(), verbatim=False, optuna_trial=AlwaysPruneTrial())
