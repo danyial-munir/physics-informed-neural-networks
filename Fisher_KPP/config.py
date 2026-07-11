@@ -27,6 +27,8 @@ class Config:
     # Time domain: t in [0, T]
     T: float = 6.0
     n_t: int = 600  # number of FD reference time steps
+    t_train: float = None  # end of the training window; defaults to T
+    train_extrap: bool = True  # if False, collocation points are restricted to [0, t_train]
 
     @property
     def delta_x(self) -> float:
@@ -76,3 +78,7 @@ class Config:
     # Epoch snapshots
     snapshot_epochs: tuple = (1, 50, 300, 1000, 2000, 4000, 10000)
     log_every: int = 50
+
+    def __post_init__(self):
+        if self.t_train is None:
+            self.t_train = self.T

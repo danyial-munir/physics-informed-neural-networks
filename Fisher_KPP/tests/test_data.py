@@ -42,6 +42,18 @@ def test_make_validation_grid_shapes():
     assert np.isfinite(u_val).all()
 
 
+def test_make_collocation_respects_t_train_when_train_extrap_false():
+    cfg = small_cfg(t_train=0.5, train_extrap=False)
+    t_col, x_col = make_collocation(cfg)
+    assert (t_col <= cfg.t_train).all()
+
+
+def test_make_collocation_ignores_t_train_when_train_extrap_true():
+    cfg = small_cfg(t_train=0.1, train_extrap=True)
+    t_col, x_col = make_collocation(cfg)
+    assert t_col.max() > cfg.t_train  # can exceed t_train since default T=1.0
+
+
 def test_generate_data_shapes_and_ic_matches_u_0():
     cfg = small_cfg()
     data = generate_data(cfg)

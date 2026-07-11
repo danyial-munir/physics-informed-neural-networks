@@ -25,8 +25,15 @@ def make_observation(
 
 
 def make_collocation(cfg: Config) -> tuple[np.ndarray, np.ndarray]:
-    """PDE residual collocation points sampled uniformly over the domain."""
-    t_col = np.random.uniform(0.0, cfg.T, cfg.n_col)
+    """
+    PDE residual collocation points sampled uniformly over the domain.
+
+    When cfg.train_extrap is False, points are restricted to [0, t_train] --
+    used by the blind-extrapolation experiment to test whether the PINN
+    generalises the traveling front beyond its training window.
+    """
+    t_max = cfg.T if cfg.train_extrap else cfg.t_train
+    t_col = np.random.uniform(0.0, t_max, cfg.n_col)
     x_col = np.random.uniform(-cfg.L, cfg.L, cfg.n_col)
     return t_col, x_col
 
