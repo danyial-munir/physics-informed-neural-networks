@@ -102,7 +102,7 @@ def predict_from_state(
     state_dict: dict, t: np.ndarray, x: np.ndarray, cfg: Config
 ) -> np.ndarray:
     """Restore a CPU snapshot and predict."""
-    tmp = FCNet(cfg)
+    tmp = InverseFCNet(cfg) if "_D_raw" in state_dict else FCNet(cfg)
     tmp.load_state_dict(state_dict)
     tmp.eval()
     return predict(tmp, t, x)

@@ -53,3 +53,15 @@ def test_predict_from_state_matches_direct_predict():
     u_restored = predict_from_state(state_dict, t, x, cfg)
 
     assert np.allclose(u_direct, u_restored)
+
+
+def test_predict_from_state_handles_inverse_model_state_dict():
+    cfg = small_cfg()
+    model = InverseFCNet(cfg)
+    t = np.linspace(0.0, 1.0, 10)
+    x = np.linspace(-cfg.L, cfg.L, 10)
+
+    state_dict = model.state_dict()
+    u = predict_from_state(state_dict, t, x, cfg)
+    assert u.shape == (10,)
+    assert np.isfinite(u).all()

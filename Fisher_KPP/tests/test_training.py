@@ -110,3 +110,29 @@ def test_train_raises_trial_pruned_when_trial_requests_prune():
 
     with pytest.raises(optuna.exceptions.TrialPruned):
         train(model, data, cfg, device=get_device(), verbatim=False, optuna_trial=AlwaysPruneTrial())
+
+
+def test_inverse_training_then_plotting_does_not_crash(tmp_path):
+    import matplotlib
+    matplotlib.use("Agg")
+    from utils import save_model
+    from plot import save_plots_from_file
+
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    cfg = tiny_cfg(use_data=True, n_epochs=20, log_every=5)
+    model = InverseFCNet(cfg)
+    data = generate_data(cfg)
+
+    history, snapshots, best_state = train(
+        model, data, cfg, device=get_device(), verbatim=False
+    )
+
+    save_model(best_state, history, snapshots, cfg, tmp_path)
+    save_plots_from_file(tmp_path, verbatim=False)
+
+    assert (tmp_path / "solution_heatmap.png").exists()
+    assert (tmp_path / "snapshots.png").exists()
+    assert (tmp_path / "losses.png").exists()
+    assert (tmp_path / "parameter_convergence.png").exists()
