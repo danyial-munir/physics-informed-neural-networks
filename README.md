@@ -379,6 +379,8 @@ Same structure as the other two projects. Key parameters:
 | `lambda_ic` | `10.0` | Weight for the initial condition loss term |
 | `lambda_bc` | `10.0` | Weight for the boundary condition loss term |
 | `patience` | `4000` | Early stopping patience (epochs) |
+| `t_train` | `T` | End of the collocation-sampling window; defaults to `T` (full domain) unless overridden |
+| `train_extrap` | `True` | If `False`, PDE residual collocation points are restricted to `[0, t_train]` — used by the blind-extrapolation experiment |
 
 The initial condition is a smoothed step, $u(x, 0) = 0.5(1 - \tanh(x/\varepsilon))$, avoiding the non-differentiable sharp step that would otherwise destabilise the physics-loss gradient at $x=0$. Boundary conditions are Dirichlet: $u(-L, t) = 1$, $u(L, t) = 0$.
 
@@ -395,7 +397,7 @@ Provides the ground truth reference used for both forward-PINN validation and in
 #### `data.py`
 
 - `make_observation(cfg, u_grid, t_arr)` — generates `n_obs` random $(t, x)$ pairs and interpolates noisy $u$ values from the FD grid.
-- `make_collocation(cfg)` — generates random PDE residual collocation points over the full domain.
+- `make_collocation(cfg)` — generates random PDE residual collocation points over the full domain, or restricted to `[0, cfg.t_train]` when `cfg.train_extrap` is `False`.
 - `make_bc_points(cfg)` — generates random time points for the boundary condition loss.
 - `make_validation(cfg, u_grid, t_arr)` — generates a regular `(n_grid_val × n_grid_val)` meshgrid with ground truth $u$ values for validation.
 - `generate_data(cfg)` — full pipeline; also stores the FD grid and initial condition arrays in the returned dict.
@@ -416,17 +418,17 @@ Provides the ground truth reference used for both forward-PINN validation and in
 The total loss is: $\mathcal{L}_{tot} = \mathcal{L}_{data} + \lambda_{phys}\mathcal{L}_{physics} + \lambda_{ic}\mathcal{L}_{ic} + \lambda_{bc}\mathcal{L}_{bc}$
 
 #### `trainer.py`
-Same structure as the other two trainers — inverse mode is detected via a `D_hat` attribute on the model, and separate learning rates (`lr` for the network, `lr_inverse` for `_D_raw`/`_r_raw`) are used in inverse mode.
+Same structure as the other two trainers — inverse mode is detected via a `D_hat` attribute on the model, separate learning rates (`lr` for the network, `lr_inverse` for `_D_raw`/`_r_raw`) are used in inverse mode, and an optional `optuna_trial` argument enables mid-training pruning (see [Hyperparameter tuning with Optuna](#hyperparameter-tuning-with-optuna)).
 
 #### `plot.py`
-- `plot_solution_heatmap` — side-by-side heatmap of the FD reference and the PINN prediction over the full $(x, t)$ domain.
+- `plot_solution_heatmap` — side-by-side heatmap of the FD reference and the PINN prediction over the full $(x, t)$ domain. Correctly reconstructs either `FCNet` or `InverseFCNet` from a saved state dict.
 - `plot_snapshots` — FD reference vs. PINN prediction at fixed times, with the analytic wave-speed front position marked.
 - `plot_losses` — training loss curves on a log scale.
 - `plot_predicted_parameter_convergence` — $\hat{D}$, $\hat{r}$ vs. epoch against the ground-truth values (inverse mode).
 - `save_plots_from_file` — loads a saved run and regenerates all plots.
 
 #### `utils.py`
-Identical in structure to the other two projects.
+Identical in structure to the other two projects, including `load_best_cfg(json_path)` for restoring an Optuna best-trial config.
 
 ## Running the demo scripts
 
@@ -544,6 +546,24 @@ uv run python Fisher_KPP/scripts/inversepinn_data_generation.py
 
 This runs until `Ctrl+C`, randomising $D, r$ each iteration and appending results to `outputs/parameter_estimation/D_r_pairs.csv`.
 
+#### Additional experiment scripts
+
+| Script | Purpose | Output |
+|---|---|---|
+| `pinn_nophys.py` | No-physics ablation — trains a plain data-fitting network (`use_physics=False, use_ic=False, use_bc=False, use_data=True`) as a baseline to compare against the physics-informed forward run | `outputs/D1_r1_ML/` |
+| `pinn_cases.py` | Sweeps `D ∈ {0.5, 1.0, 2.0}` × `r ∈ {0.5, 1.0, 2.0}`, training a forward PINN for each combination | `outputs/D{D}_r{r}/` per case |
+| `pinn_blind_extrap.py` | Trains with collocation points restricted to `t_train=3.0` (half of `T=6.0`, via `train_extrap=False`), then plots the prediction across the full domain to reveal how well the traveling front generalises past its training window | `outputs/D1_r1_extrapblind/` |
+| `optuna_tuning.py` | Optuna TPE hyperparameter search over `hidden`, `n_layers`, `lambda_phys`, `lambda_ic`, `lambda_bc`, `lr`, `scheduler_gamma`, `scheduler_step` (fixed `D=1.0, r=1.0` — Fisher-KPP has no IC-regime axis to loop over, unlike Burgers') | `outputs/optuna_tuning/` |
+| `optuna_tuning_plots.py` | Loads `best_params.json` from the Optuna search, retrains with those hyperparameters, saves plots | `outputs/optuna_tuning/` |
+
+```bash
+uv run python Fisher_KPP/scripts/pinn_nophys.py
+uv run python Fisher_KPP/scripts/pinn_cases.py
+uv run python Fisher_KPP/scripts/pinn_blind_extrap.py
+uv run python Fisher_KPP/scripts/optuna_tuning.py
+uv run python Fisher_KPP/scripts/optuna_tuning_plots.py
+```
+
 ---
 
 ### Output directory layout
@@ -601,7 +621,7 @@ For the inverse problem, replace `FCNet` with `InverseFCNet` and set `cfg.use_da
 
 ## Hyperparameter tuning with Optuna
 
-Both projects support Optuna-based hyperparameter search. Pass an `optuna.Trial` to `train()` to enable pruning. A minimal study looks like:
+All three projects support Optuna-based hyperparameter search. Pass an `optuna.Trial` to `train()` to enable pruning. A minimal study looks like:
 
 ```python
 import optuna
