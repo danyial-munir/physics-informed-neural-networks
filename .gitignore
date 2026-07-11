@@ -7,3 +7,6 @@
 .pytest_cache
 .uv-cache
 .superpowers
+node_modules
+docs
+presentation
