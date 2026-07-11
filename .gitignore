@@ -2,3 +2,8 @@
 */outputs/**
 **/__pycache__/**
 .coverage
+.codegraph
+.claude
+.pytest_cache
+.uv-cache
+.superpowers
