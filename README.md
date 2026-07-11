@@ -4,10 +4,11 @@
 **Email:** danyial.munir@studio.unibo.it  
 **Last modified:** 08-July-2026
 
-This project applies Physics-Informed Neural Networks (PINNs) to two classical problems in mathematical physics:
+This project applies Physics-Informed Neural Networks (PINNs) to three classical problems in mathematical physics:
 
 1. **Damped Harmonic Oscillator** — a second-order ODE
 2. **Burgers' Equation** — a nonlinear PDE describing convection and diffusion
+3. **Fisher-KPP Equation** — a nonlinear reaction-diffusion PDE describing traveling-front propagation
 
 Both forward problems (predict the solution given known parameters) and inverse problems (recover unknown physical parameters from noisy observations) are implemented.
 
@@ -27,9 +28,20 @@ Both forward problems (predict the solution given known parameters) and inverse 
 │   ├── utils.py        # Helper utilities (device, tensors, save/load)
 │   └── scripts/        # Example scripts to train PINNs
 │
-└── Burgers_Equation/
+├── Burgers_Equation/
+│   ├── config.py       # Physical constants, hyperparameters, runtime settings
+│   ├── analytic.py     # Ground truth solvers (Cole-Hopf, Euler, Lax-Wendroff)
+│   ├── data.py         # Data generation (observations, collocation, validation)
+│   ├── model.py        # FCNet and InverseFCNet architectures
+│   ├── losses.py       # Loss functions (data, physics, IC, boundary condition)
+│   ├── trainer.py      # Training loop with early stopping and snapshots
+│   ├── plot.py         # All plotting functions
+│   ├── utils.py        # Helper utilities (device, tensors, save/load)
+│   └── scripts/        # Example scripts to train PINNs
+│
+└── Fisher_KPP/
     ├── config.py       # Physical constants, hyperparameters, runtime settings
-    ├── analytic.py     # Ground truth solvers (Cole-Hopf, Euler, Lax-Wendroff)
+    ├── analytic.py     # CFL-stable finite-difference reference solver
     ├── data.py         # Data generation (observations, collocation, validation)
     ├── model.py        # FCNet and InverseFCNet architectures
     ├── losses.py       # Loss functions (data, physics, IC, boundary condition)
@@ -71,6 +83,7 @@ Run commands through the project environment with:
 uv run python main.py
 uv run python Damped_Oscillator/scripts/pinn_demo.py
 uv run python Burgers_Equation/scripts/pinn_demo.py
+uv run python Fisher_KPP/scripts/pinn_demo.py
 ```
 
 ### Set up with pip
@@ -88,6 +101,7 @@ Run commands with:
 python main.py
 python Damped_Oscillator/scripts/pinn_demo.py
 python Burgers_Equation/scripts/pinn_demo.py
+python Fisher_KPP/scripts/pinn_demo.py
 ```
 
 ### Dependencies
@@ -113,7 +127,7 @@ Install dev deps once:
 uv sync --group dev
 ```
 
-Run the complete suite — both projects, smoke + training-loop regression, in parallel, per-test results and per-file coverage for each project, plus a pass/fail summary, all in one command:
+Run the complete suite — all three projects, smoke + training-loop regression, in parallel, per-test results and per-file coverage for each project, plus a pass/fail summary, all in one command:
 
 ```bash
 uv run python run_tests.py
@@ -124,6 +138,7 @@ Run a single project's suite (with the same verbose + coverage output):
 ```bash
 cd Damped_Oscillator && uv run python -m pytest tests -v --cov=. --cov-report=term-missing
 cd Burgers_Equation && uv run python -m pytest tests -v --cov=. --cov-report=term-missing
+cd Fisher_KPP && uv run python -m pytest tests -v --cov=. --cov-report=term-missing
 ```
 
 Run only smoke tests (fast, no training) or only regression tests (slower, trains tiny nets for a few hundred epochs) per project:
@@ -134,6 +149,9 @@ cd Damped_Oscillator && uv run python -m pytest tests/test_training.py
 
 cd Burgers_Equation && uv run python -m pytest tests/test_smoke.py
 cd Burgers_Equation && uv run python -m pytest tests/test_training.py
+
+cd Fisher_KPP && uv run python -m pytest tests/test_smoke.py
+cd Fisher_KPP && uv run python -m pytest tests/test_training.py
 ```
 
 ---
@@ -327,9 +345,94 @@ Same structure as the DHO trainer with the following additions:
 #### `utils.py`
 Identical in structure to the DHO utils. The `load_best_cfg` function reads an Optuna JSON output and populates a `Config` object, mapping the `regime` key to the `ic` field.
 
+---
+
+## Chapter 3 — Fisher-KPP Equation
+
+### Physics
+
+The [Fisher-KPP equation](https://en.wikipedia.org/wiki/KPP%E2%80%93Fisher_equation) is:
+
+$u_t = D u_{xx} + r u (1 - u)$
+
+where $D$ is the diffusion coefficient and $r$ is the logistic growth rate. It combines linear diffusion with logistic reaction, and is the classical model for a population (or gene, or reactant) spreading through space while growing towards a carrying capacity of $u=1$. For a step-like initial condition, the solution relaxes into a traveling wave front moving at the analytic minimum speed $c = 2\sqrt{rD}$.
+
+### File descriptions
+
+#### `config.py`
+Same structure as the other two projects. Key parameters:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `D` | `1.0` | Diffusion coefficient |
+| `r` | `1.0` | Logistic growth rate |
+| `eps` | `0.5` | Tanh smoothing width for the initial condition |
+| `L` | `20.0` | Spatial domain is $x \in [-L, L]$ |
+| `T` | `6.0` | Time domain is $t \in [0, T]$ |
+| `n_x` | `400` | Spatial resolution of the FD reference grid |
+| `n_t` | `600` | Number of FD reference time snapshots |
+| `n_col` | `2000` | PDE residual collocation points |
+| `n_bc` | `100` | Boundary condition points per epoch |
+| `hidden` | `64` | Nodes per hidden layer |
+| `n_layers` | `6` | Number of hidden layers |
+| `lambda_phys` | `1.0` | Weight for the physics loss term |
+| `lambda_ic` | `10.0` | Weight for the initial condition loss term |
+| `lambda_bc` | `10.0` | Weight for the boundary condition loss term |
+| `patience` | `4000` | Early stopping patience (epochs) |
+| `t_train` | `T` | End of the collocation-sampling window; defaults to `T` (full domain) unless overridden |
+| `train_extrap` | `True` | If `False`, PDE residual collocation points are restricted to `[0, t_train]` — used by the blind-extrapolation experiment |
+
+The initial condition is a smoothed step, $u(x, 0) = 0.5(1 - \tanh(x/\varepsilon))$, avoiding the non-differentiable sharp step that would otherwise destabilise the physics-loss gradient at $x=0$. Boundary conditions are Dirichlet: $u(-L, t) = 1$, $u(L, t) = 0$.
+
+#### `analytic.py`
+Provides the ground truth reference used for both forward-PINN validation and inverse-problem synthetic observations:
+
+- `u_0(cfg)` — the smoothed step initial condition.
+- `wave_speed(cfg)` — the analytic KPP traveling-wave speed $c = 2\sqrt{rD}$, used only as a plot sanity-check overlay (Fisher-KPP has no general closed-form solution outside this special-speed case).
+- `compute_stable_dt(cfg)` — CFL-stable explicit time step, $dt \le dx^2 / (2D)$, per the von Neumann diffusion stability limit. The bounded reaction term does not tighten this limit for the parameter ranges used here.
+- `fd_step(u, dt, cfg)` — one explicit-Euler finite-difference step: central differences for $u_{xx}$, explicit reaction term $ru(1-u)$, Dirichlet boundaries held fixed.
+- `solve_kpp_fd(cfg)` — marches `fd_step` from $u_0$ to $t=T$, returning a `(n_snapshots, n_x)` solution grid and its time array.
+- `interpolate_solution(u_grid, t_arr, x, t, cfg)` — bilinear interpolation of the FD grid at arbitrary $(x, t)$.
+
+#### `data.py`
+
+- `make_observation(cfg, u_grid, t_arr)` — generates `n_obs` random $(t, x)$ pairs and interpolates noisy $u$ values from the FD grid.
+- `make_collocation(cfg)` — generates random PDE residual collocation points over the full domain, or restricted to `[0, cfg.t_train]` when `cfg.train_extrap` is `False`.
+- `make_bc_points(cfg)` — generates random time points for the boundary condition loss.
+- `make_validation(cfg, u_grid, t_arr)` — generates a regular `(n_grid_val × n_grid_val)` meshgrid with ground truth $u$ values for validation.
+- `generate_data(cfg)` — full pipeline; also stores the FD grid and initial condition arrays in the returned dict.
+
+#### `model.py`
+
+- **`FCNet`**: maps $(t, x) \to u(t, x)$. Architecture: `2 → [hidden × n_layers] → 1` with `Tanh` activations.
+- **`InverseFCNet`**: same architecture but adds two learnable scalar parameters, `_D_raw` and `_r_raw`. The physical parameters are recovered as `D_hat = softplus(_D_raw)` and `r_hat = softplus(_r_raw)`, ensuring both stay positive throughout optimisation.
+
+#### `losses.py`
+
+- **`loss_data`** — MSE between predicted and observed $u$ values.
+- **`loss_physics`** — mean squared PDE residual: $\mathcal{L}_{physics} = \frac{1}{N}\sum_{i=1}^N (\hat{u}_t - D\hat{u}_{xx} - r\hat{u}(1-\hat{u}))^2$, with all derivatives computed via `torch.autograd.grad`.
+- **`loss_physics_inverse`** — same but uses `model.D_hat` and `model.r_hat` in place of `cfg.D` and `cfg.r`.
+- **`loss_ic`** — MSE between the predicted and true initial condition over all $x$.
+- **`loss_bc`** — MSE of predicted values at both boundaries against the Dirichlet conditions.
+
+The total loss is: $\mathcal{L}_{tot} = \mathcal{L}_{data} + \lambda_{phys}\mathcal{L}_{physics} + \lambda_{ic}\mathcal{L}_{ic} + \lambda_{bc}\mathcal{L}_{bc}$
+
+#### `trainer.py`
+Same structure as the other two trainers — inverse mode is detected via a `D_hat` attribute on the model, separate learning rates (`lr` for the network, `lr_inverse` for `_D_raw`/`_r_raw`) are used in inverse mode, and an optional `optuna_trial` argument enables mid-training pruning (see [Hyperparameter tuning with Optuna](#hyperparameter-tuning-with-optuna)).
+
+#### `plot.py`
+- `plot_solution_heatmap` — side-by-side heatmap of the FD reference and the PINN prediction over the full $(x, t)$ domain. Correctly reconstructs either `FCNet` or `InverseFCNet` from a saved state dict.
+- `plot_snapshots` — FD reference vs. PINN prediction at fixed times, with the analytic wave-speed front position marked.
+- `plot_losses` — training loss curves on a log scale.
+- `plot_predicted_parameter_convergence` — $\hat{D}$, $\hat{r}$ vs. epoch against the ground-truth values (inverse mode).
+- `save_plots_from_file` — loads a saved run and regenerates all plots.
+
+#### `utils.py`
+Identical in structure to the other two projects, including `load_best_cfg(json_path)` for restoring an Optuna best-trial config.
+
 ## Running the demo scripts
 
-Both projects ship ready-to-run demo scripts under their respective `scripts/` folders. Use `uv run` when you set up the project with uv, or activate `.venv` and use `python` when you set it up with pip.
+All three projects ship ready-to-run demo scripts under their respective `scripts/` folders. Use `uv run` when you set up the project with uv, or activate `.venv` and use `python` when you set it up with pip.
 
 ### Command format
 
@@ -408,6 +511,61 @@ uv run python Burgers_Equation/scripts/inversepinn_demo.py --nu-regime low --out
 
 ---
 
+### Fisher-KPP Equation
+
+#### Forward problem
+
+```bash
+uv run python Fisher_KPP/scripts/pinn_demo.py
+uv run python Fisher_KPP/scripts/pinn_demo.py --D 0.5 --r 2.0
+uv run python Fisher_KPP/scripts/pinn_demo.py --output outputs/my_run
+```
+
+#### Inverse problem
+
+```bash
+uv run python Fisher_KPP/scripts/inversepinn_demo.py
+uv run python Fisher_KPP/scripts/inversepinn_demo.py --D 0.5 --r 2.0
+uv run python Fisher_KPP/scripts/inversepinn_demo.py --output outputs/my_run
+```
+
+#### Shared CLI arguments — Fisher-KPP Equation
+
+| Argument | Default | Description |
+|---|---|---|
+| `--D` | `1.0` | Diffusion coefficient |
+| `--r` | `1.0` | Logistic growth rate |
+| `--show` | `False` | Display plots interactively after training |
+| `--output` | `outputs/pinn_D<D>_r<r>` (forward) or `outputs/inversepinn_D<D>_r<r>` (inverse) | Override the output directory |
+
+Continuous true/predicted `(D, r)` pairs for the inverse problem can be generated with:
+
+```bash
+uv run python Fisher_KPP/scripts/inversepinn_data_generation.py
+```
+
+This runs until `Ctrl+C`, randomising $D, r$ each iteration and appending results to `outputs/parameter_estimation/D_r_pairs.csv`.
+
+#### Additional experiment scripts
+
+| Script | Purpose | Output |
+|---|---|---|
+| `pinn_nophys.py` | No-physics ablation — trains a plain data-fitting network (`use_physics=False, use_ic=False, use_bc=False, use_data=True`) as a baseline to compare against the physics-informed forward run | `outputs/D1_r1_ML/` |
+| `pinn_cases.py` | Sweeps `D ∈ {0.5, 1.0, 2.0}` × `r ∈ {0.5, 1.0, 2.0}`, training a forward PINN for each combination | `outputs/D{D}_r{r}/` per case |
+| `pinn_blind_extrap.py` | Trains with collocation points restricted to `t_train=3.0` (half of `T=6.0`, via `train_extrap=False`), then plots the prediction across the full domain to reveal how well the traveling front generalises past its training window | `outputs/D1_r1_extrapblind/` |
+| `optuna_tuning.py` | Optuna TPE hyperparameter search over `hidden`, `n_layers`, `lambda_phys`, `lambda_ic`, `lambda_bc`, `lr`, `scheduler_gamma`, `scheduler_step` (fixed `D=1.0, r=1.0` — Fisher-KPP has no IC-regime axis to loop over, unlike Burgers') | `outputs/optuna_tuning/` |
+| `optuna_tuning_plots.py` | Loads `best_params.json` from the Optuna search, retrains with those hyperparameters, saves plots | `outputs/optuna_tuning/` |
+
+```bash
+uv run python Fisher_KPP/scripts/pinn_nophys.py
+uv run python Fisher_KPP/scripts/pinn_cases.py
+uv run python Fisher_KPP/scripts/pinn_blind_extrap.py
+uv run python Fisher_KPP/scripts/optuna_tuning.py
+uv run python Fisher_KPP/scripts/optuna_tuning_plots.py
+```
+
+---
+
 ### Output directory layout
 
 ```
@@ -463,7 +621,7 @@ For the inverse problem, replace `FCNet` with `InverseFCNet` and set `cfg.use_da
 
 ## Hyperparameter tuning with Optuna
 
-Both projects support Optuna-based hyperparameter search. Pass an `optuna.Trial` to `train()` to enable pruning. A minimal study looks like:
+All three projects support Optuna-based hyperparameter search. Pass an `optuna.Trial` to `train()` to enable pruning. A minimal study looks like:
 
 ```python
 import optuna
